@@ -1,2 +1,1 @@
-# example
 an *insular* community.

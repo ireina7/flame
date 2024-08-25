@@ -1,16 +1,20 @@
 use std::{
     fs,
-    io::{self, Write},
+    io::{self, Read, Write},
+    sync::OnceLock,
 };
 
 use anyhow::anyhow;
 use clap::{Parser, Subcommand};
 use colored::*;
+use termimad::MadSkin;
 
 use crate::{
     review::{logic, Quality, Retriever},
     words::{App, Item, Word},
 };
+
+static SKIN: OnceLock<MadSkin> = OnceLock::new();
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
@@ -22,6 +26,10 @@ pub struct Args {
     /// Whether count as a day
     #[arg(short, long)]
     pub count_as_a_day: bool,
+
+    /// Repeat
+    #[arg(short, long)]
+    pub repeat: bool,
 
     #[command(subcommand)]
     pub cmd: Command,
@@ -50,57 +58,85 @@ pub const MARK: &str = "[MARK]";
 pub const INPUT: &str = ">";
 
 pub fn run(args: Args) -> anyhow::Result<()> {
+    let mut skin = MadSkin::default();
+    skin.italic
+        .set_fg(termimad::crossterm::style::Color::Yellow);
+    skin.bold.set_fg(termimad::crossterm::style::Color::Green);
+    // skin.print_inline("*Hey* **World!** Here's `some(code)`");
+    // skin.paragraph
+    //     .set_fgbg(termimad::crossterm::style::Color::Magenta, rgb(30, 30, 40));
+
+    // println!(
+    //     "\nand now {}\n",
+    //     skin.inline("a little *too much* **style!** (and `some(code)` too)")
+    // );
+
+    SKIN.get_or_init(|| skin);
     println!("{}\n", logo());
 
     let mut app = App::from(&args.path, false)?;
-    let ids = app.retrieve()?;
-    println!(
-        "{} Totally {} items to review today.",
-        INFO.blue(),
-        ids.len()
-    );
-    if args.count_as_a_day {
-        println!("{} Counting as a day.", INFO.blue());
-    }
-    let mut cnt = 0;
+    loop {
+        let ids = app.retrieve()?;
+        if ids.is_empty() {
+            break;
+        }
 
-    app.count_as_a_day = args.count_as_a_day;
-    let quit = logic::<_, anyhow::Error>(&mut app, |item| {
-        let ratio = cnt as f64 / ids.len() as f64;
-        let finished = (100.0 * ratio).ceil() as usize;
-        println!(
-            "\n{}{}",
-            (0..finished).map(|_| "#").collect::<Vec<&str>>().join(""),
-            (0..if finished <= 100 { 100 - finished } else { 0 })
-                .map(|_| "-")
-                .collect::<Vec<&str>>()
-                .join("")
-        );
-        let ans = handle_item(item);
-        cnt += 1;
-        ans
-    })?;
-    if quit {
-        println!("\n{} Saving progress...", INFO.blue());
-        app.save(&args.path)?;
+        println!("\n{} Totally {} items to review.", INFO.blue(), ids.len());
+        if args.count_as_a_day {
+            println!("{} Counting as a day.", INFO.blue());
+        }
+        let mut cnt = 0;
 
-        println!("{} Bye bye.", INFO.blue());
-        return Ok(());
+        app.count_as_a_day = args.count_as_a_day;
+        let quit = logic::<_, anyhow::Error>(&mut app, |item| {
+            let ratio = cnt as f64 / ids.len() as f64;
+            print_progress_bar(ratio);
+            let ans = handle_item(item);
+            cnt += 1;
+            ans
+        })?;
+        if quit || !args.repeat {
+            let ratio = cnt as f64 / ids.len() as f64;
+            print_progress_bar(ratio);
+            break;
+        }
     }
 
-    println!("\n{} Saving progress...", INFO.blue());
+    println!("{} Saving progress...", INFO.blue());
     app.save(&args.path)?;
-
     println!("{} Bye bye.", INFO.blue());
     Ok(())
 }
 
+#[inline]
+fn print_progress_bar(ratio: f64) {
+    let finished = (100.0 * ratio).ceil() as usize;
+    println!(
+        "\n{}{}",
+        (0..finished).map(|_| "#").collect::<Vec<&str>>().join(""),
+        (0..if finished <= 100 { 100 - finished } else { 0 })
+            .map(|_| "-")
+            .collect::<Vec<&str>>()
+            .join("")
+    );
+}
+
 fn handle_item(item: &Item<Word>) -> anyhow::Result<Option<Quality>> {
-    println!("[{}]", item.payload.word.bold().bright_green().italic());
-    termimad::print_inline(item.payload.detail()?.as_str());
+    print!("[{}]", item.payload.word.bold().bright_green().italic());
+    io::stdout().flush().unwrap();
+
+    {
+        let mut stdin_handle = io::stdin().lock();
+        let mut byte = [0_u8];
+        stdin_handle.read_exact(&mut byte).unwrap();
+    }
+
+    SKIN.get()
+        .unwrap()
+        .print_inline(item.payload.detail()?.as_str());
     println!("\n");
     println!(
-        "{} blackout(b) | incorrect(i) | correct but hard(h) | correct(c) | perfect(f):",
+        "{} Blackout(b) | Incorrect(i) | correct but Hard(h) | Correct(c) | perFect(f) | Never(n):",
         MARK.bright_purple()
     );
     read_quality()
@@ -120,6 +156,7 @@ fn read_quality() -> anyhow::Result<Option<Quality>> {
         "h" => 3,
         "c" => 4,
         "f" => 5,
+        "n" => todo!(),
         "q" => return Ok(None),
         x => {
             eprintln!("unknown mark: {}", x);
@@ -148,4 +185,11 @@ pub fn add(app: &mut App, name: String, path: String) -> io::Result<()> {
         detail: path,
     });
     Ok(())
+}
+
+pub fn handle_delete(args: &Args, name: String) -> anyhow::Result<()> {
+    let mut app = App::from(&args.path, false)?;
+    app.db.mem.retain(|_, item| item.payload.word != name);
+    let ans = app.save(&args.path)?;
+    Ok(ans)
 }

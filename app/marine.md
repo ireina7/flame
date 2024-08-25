@@ -1,0 +1,1 @@
+Human beings are natural enemies of *marine* mammals.
