@@ -11,7 +11,7 @@ pub struct InMemory<Content> {
     pub mem: HashMap<usize, Content>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Item<Payload> {
     repetition: usize,
     factor: f64,
@@ -108,7 +108,7 @@ impl<Payload> Update for InMemory<Item<Payload>> {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Word {
     pub word: String,
     pub detail: String,

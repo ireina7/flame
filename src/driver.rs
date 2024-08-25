@@ -38,13 +38,16 @@ pub enum Command {
     /// Delete word
     Delete { name: String },
 
+    /// Show word
+    Show { name: String },
+
     /// Clear words
     Clear,
 }
 
-const INFO: &str = "[INFO]";
-const MARK: &str = "[MARK]";
-const INPUT: &str = ">";
+pub const INFO: &str = "[INFO]";
+pub const MARK: &str = "[MARK]";
+pub const INPUT: &str = ">";
 
 pub fn run(args: Args) -> anyhow::Result<()> {
     println!("{}\n", logo());
