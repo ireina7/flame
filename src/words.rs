@@ -8,7 +8,7 @@ use std::{collections::HashMap, fs, io};
 pub struct InMemory<Content> {
     version: DateTime<Local>,
     next_id: usize,
-    mem: HashMap<usize, Content>,
+    pub mem: HashMap<usize, Content>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -136,7 +136,7 @@ impl InMemory<Item<Word>> {
 
 pub struct App {
     pub count_as_a_day: bool,
-    db: InMemory<Item<Word>>,
+    pub db: InMemory<Item<Word>>,
 }
 
 impl App {

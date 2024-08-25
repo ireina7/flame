@@ -35,6 +35,9 @@ pub enum Command {
     /// Add word
     Add { name: String, path: String },
 
+    /// Delete word
+    Delete { name: String },
+
     /// Clear words
     Clear,
 }
