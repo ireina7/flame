@@ -1,7 +1,10 @@
-use std::io::{self, Write};
+use std::{
+    fs,
+    io::{self, Write},
+};
 
 use anyhow::anyhow;
-use clap::Parser;
+use clap::{Parser, Subcommand};
 use colored::*;
 
 use crate::{
@@ -12,19 +15,35 @@ use crate::{
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
 pub struct Args {
+    /// Path of index json
     #[arg(short, long)]
     pub path: String,
 
+    /// Whether count as a day
     #[arg(short, long)]
     pub count_as_a_day: bool,
+
+    #[command(subcommand)]
+    pub cmd: Command,
+}
+
+#[derive(Debug, Subcommand)]
+pub enum Command {
+    /// Launch
+    Up,
+
+    /// Add word
+    Add { name: String, path: String },
+
+    /// Clear words
+    Clear,
 }
 
 const INFO: &str = "[INFO]";
 const MARK: &str = "[MARK]";
 const INPUT: &str = ">";
 
-pub fn run() -> anyhow::Result<()> {
-    let args = Args::parse();
+pub fn run(args: Args) -> anyhow::Result<()> {
     println!("{}\n", logo());
 
     let mut app = App::from(&args.path, false)?;
@@ -34,18 +53,19 @@ pub fn run() -> anyhow::Result<()> {
         INFO.blue(),
         ids.len()
     );
+    if args.count_as_a_day {
+        println!("{} Counting as a day.", INFO.blue());
+    }
     let mut cnt = 0;
 
     app.count_as_a_day = args.count_as_a_day;
     let quit = logic::<_, anyhow::Error>(&mut app, |item| {
         let ratio = cnt as f64 / ids.len() as f64;
+        let finished = (100.0 * ratio).ceil() as usize;
         println!(
             "\n{}{}",
-            (0..(100.0 * ratio).ceil() as usize)
-                .map(|_| "#")
-                .collect::<Vec<&str>>()
-                .join(""),
-            (0..(100 - ((100.0 * ratio).ceil() as usize)))
+            (0..finished).map(|_| "#").collect::<Vec<&str>>().join(""),
+            (0..if finished <= 100 { 100 - finished } else { 0 })
                 .map(|_| "-")
                 .collect::<Vec<&str>>()
                 .join("")
@@ -77,12 +97,13 @@ fn handle_item(item: &Item<Word>) -> anyhow::Result<Option<Quality>> {
         "{} blackout(b) | incorrect(i) | correct but hard(h) | correct(c) | perfect(f):",
         MARK.bright_purple()
     );
-    print!("{} ", INPUT.bright_yellow());
-    io::stdout().flush().unwrap();
     read_quality()
 }
 
 fn read_quality() -> anyhow::Result<Option<Quality>> {
+    print!("{} ", INPUT.bright_yellow());
+    io::stdout().flush().unwrap();
+
     let mut ans = String::new();
     io::stdin()
         .read_line(&mut ans)
@@ -94,7 +115,10 @@ fn read_quality() -> anyhow::Result<Option<Quality>> {
         "c" => 4,
         "f" => 5,
         "q" => return Ok(None),
-        x => return Err(anyhow!("unknown mark: {}", x)),
+        x => {
+            eprintln!("unknown mark: {}", x);
+            return read_quality();
+        }
     };
 
     Quality::from(q)
@@ -109,4 +133,13 @@ _/ ____\  | _____    _____   ____
  |  |  |  |__/ __ \|  Y Y  \  ___/ 
  |__|  |____(____  /__|_|  /\___  >
                  \/      \/     \/ "#
+}
+
+pub fn add(app: &mut App, name: String, path: String) -> io::Result<()> {
+    fs::File::create(&path)?;
+    app.add(Word {
+        word: name,
+        detail: path,
+    });
+    Ok(())
 }

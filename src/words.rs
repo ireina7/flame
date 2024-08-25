@@ -7,6 +7,7 @@ use std::{collections::HashMap, fs, io};
 #[derive(Serialize, Deserialize, Debug)]
 pub struct InMemory<Content> {
     version: DateTime<Local>,
+    next_id: usize,
     mem: HashMap<usize, Content>,
 }
 
@@ -33,6 +34,7 @@ impl<Payload> InMemory<Item<Payload>> {
     pub fn new(date: DateTime<Local>) -> Self {
         Self {
             version: date,
+            next_id: 0,
             mem: HashMap::new(),
         }
     }
@@ -109,7 +111,7 @@ impl<Payload> Update for InMemory<Item<Payload>> {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Word {
     pub word: String,
-    detail: String,
+    pub detail: String,
 }
 
 impl Word {
@@ -148,6 +150,20 @@ impl App {
 
     pub fn save(self, path: &str) -> io::Result<()> {
         self.db.save(path)
+    }
+
+    fn new_item(word: Word) -> Item<Word> {
+        Item {
+            repetition: 0,
+            factor: 2.5,
+            interval: 0,
+            payload: word,
+        }
+    }
+
+    pub fn add(&mut self, word: Word) {
+        self.db.mem.insert(self.db.next_id, Self::new_item(word));
+        self.db.next_id += 1;
     }
 }
 

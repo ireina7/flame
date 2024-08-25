@@ -59,10 +59,10 @@ where
             .get(id.clone())
             .ok_or(anyhow!("failed to get id: {:?}", id.clone()))?;
 
-        let mut quality = qualify(item);
-        while let Err(err) = quality {
-            eprintln!("[Error] {:?}", err);
-            quality = qualify(item);
+        let quality = qualify(item);
+        if let Err(err) = quality {
+            eprintln!("[Error] {:?}, skipped.", err);
+            continue;
         }
 
         let quality = quality.unwrap();
